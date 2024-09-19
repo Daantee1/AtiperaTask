@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, debounceTime } from 'rxjs';
+import { BehaviorSubject } from 'rxjs';
 
 @Injectable({
   providedIn: 'root'
@@ -9,7 +9,7 @@ export class DataFilterService {
 
 
   private filterSubject = new BehaviorSubject<string>('');
-  filter$ = this.filterSubject.asObservable().pipe(debounceTime(2000));
+  filter$ = this.filterSubject.asObservable();
 
   setFilter(value: string): void {
     this.filterSubject.next(value.trim().toLowerCase());

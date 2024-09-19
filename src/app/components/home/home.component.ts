@@ -6,36 +6,50 @@ import { EditDialogComponent } from '../edit-dialog/edit-dialog.component';
 import { DataFilterService } from '../../services/data-filter.service';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-;
+import { RxState } from '@rx-angular/state';
+import { combineLatest, debounceTime, map, startWith, } from 'rxjs';
+
 
 @Component({
   selector: 'app-home',
   standalone: true,
   imports: [MatTableModule, MatDialogModule, MatFormField, MatLabel, MatInputModule],
   templateUrl: './home.component.html',
-  styleUrls: ['./home.component.scss']
+  styleUrls: ['./home.component.scss'],
+  providers: [RxState]
+
 })
 export class HomeComponent implements OnInit {
-  dataSource = new MatTableDataSource<any>();
-  originalData: any[] = [];  
+  
+
   displayedColumns: string[] = ['position', 'name', 'weight', 'symbol', 'actions'];
+  
 
   constructor(
     private http: HttpClient,
     private dialog: MatDialog,
-    private dataFilterService: DataFilterService
-  ) {}
+    private dataFilterService: DataFilterService,
+    public state: RxState<{ data: any[]; filter: string }>
+  ) {
+    this.state.set({ data: [], filter: '' });
+  }
 
   ngOnInit(): void {
-    this.http.get<any[]>('./assets/data.json').subscribe(data => {
-      this.originalData = data;  
-      this.dataSource.data = data; 
-    });
+    const data$ = this.http.get<any[]>('./assets/data.json');
 
-    this.dataFilterService.filter$.subscribe(filterValue => {
-      const filteredData = this.dataFilterService.applyFilter(this.originalData, filterValue);
-      this.dataSource.data = filteredData;
-    });
+    const filter$ = this.dataFilterService.filter$.pipe(
+      debounceTime(2000),
+      startWith('') 
+    );
+
+    this.state.connect(
+      'data',
+      combineLatest([data$, filter$]).pipe(
+        map(([data, filter]) => {
+          return this.dataFilterService.applyFilter(data, filter); 
+        })
+      )
+    );
   }
 
   applyFilter(event: Event): void {
@@ -46,16 +60,18 @@ export class HomeComponent implements OnInit {
   editRecord(element: any): void {
     const dialogRef = this.dialog.open(EditDialogComponent, {
       width: '250px',
-      data: element
+      data: { ...element }
     });
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        const index = this.originalData.findIndex(record => record.position === result.position);
-        if (index > -1) {
-          this.originalData[index] = result;
-          this.dataSource.data = [...this.originalData];  
-        }
+        this.state.set('data', (state) => {
+          const index = state.data.findIndex((record: any) => record.position === result.position);
+          if (index > -1) {
+            state.data[index] = result;
+          }
+          return [...state.data];
+        });
       }
     });
   }
